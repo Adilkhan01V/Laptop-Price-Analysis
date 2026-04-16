@@ -1,6 +1,3 @@
-# =========================
-# IMPORT LIBRARIES
-# =========================
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,14 +5,8 @@ import seaborn as sns
 from sklearn.linear_model import LinearRegression
 from scipy.stats import ttest_ind
 
-# =========================
-# LOAD DATASET
-# =========================
 df = pd.read_csv("laptop_prices.csv")
 
-# =========================
-# BASIC INFO (EDA)
-# =========================
 print("\n===== INFO =====")
 print(df.info())
 
@@ -25,21 +16,26 @@ print(df.describe())
 print("\n===== MISSING VALUES =====")
 print(df.isnull().sum())
 
-# =========================
-# SELECT IMPORTANT COLUMNS
-# =========================
 df = df[['Ram', 'Weight', 'Inches', 'CPU_freq', 'PrimaryStorage', 'Price_euros']].dropna()
+features = ['Ram', 'Weight', 'Inches', 'CPU_freq', 'PrimaryStorage', 'Price_euros']
+
+
 
 # =========================
 # HISTOGRAM + KDE
 # =========================
-features = ['Ram', 'Weight', 'Inches', 'CPU_freq', 'PrimaryStorage', 'Price_euros']
-
+#Skewness
 for col in features:
     plt.figure()
     sns.histplot(df[col], kde=True)
+
     plt.title(f"{col} Distribution (Skewness: {round(df[col].skew(), 2)})")
+    plt.xlabel(col)
+    plt.ylabel("Frequency")
+
     plt.show()
+
+
 
 # =========================
 # BOXPLOT
@@ -50,6 +46,20 @@ for col in features:
     plt.title(f"Boxplot of {col}")
     plt.show()
 
+def remove_outliers(df, column):
+    Q1 = df[column].quantile(0.25)
+    Q3 = df[column].quantile(0.75)
+    IQR = Q3 - Q1
+
+    lower = Q1 - 1.5 * IQR
+    upper = Q3 + 1.5 * IQR
+
+    return df[(df[column] >= lower) & (df[column] <= upper)]
+for col in features:
+    plt.figure()
+    sns.boxplot(y=df[col])
+    plt.title(f"Boxplot of {col}")
+    plt.show()
 # =========================
 # HEATMAP
 # =========================
@@ -66,41 +76,97 @@ plt.title("RAM vs Price")
 plt.show()
 
 print("Correlation:", df['Ram'].corr(df['Price_euros']))
+# Data cleaning (if needed)
+df['Ram'] = df['Ram'].astype(str).str.replace('GB', '').astype(int)
 
-# Linear Regression
+# Features
 X = df[['Ram']]
 y = df['Price_euros']
 
-model = LinearRegression()
-model.fit(X, y)
+# Train model
+slr_model = LinearRegression()
+slr_model.fit(X, y)
 
-print("Slope:", model.coef_[0])
-print("Intercept:", model.intercept_)
+# Coefficients
+slope = slr_model.coef_[0]
+intercept = slr_model.intercept_
 
-# =========================
-# OBJECTIVE 2: CPU vs PRICE
-# =========================
-sns.regplot(x='CPU_freq', y='Price_euros', data=df)
-plt.title("CPU vs Price")
+print(f"Equation: Price = {slope:.2f} * Ram + {intercept:.2f}")
+
+# -------------------------------
+# Prediction (example: 8GB RAM)
+# -------------------------------
+new_ram = [[8]]
+predicted_price = slr_model.predict(new_ram)
+
+print(f"Predicted Price for 8GB RAM: {predicted_price[0]:.2f} euros")
+
+# -------------------------------
+# Plot
+# -------------------------------
+plt.scatter(X, y, label="Actual Data")
+
+# Regression line
+plt.plot(X, slr_model.predict(X), color='red', label="Regression Line")
+
+# Predicted point
+plt.scatter(new_ram, predicted_price, color='green', s=100, label="Predicted Point")
+
+plt.text(8, predicted_price[0], f"({8}, {predicted_price[0]:.0f})")
+plt.xlabel("RAM (GB)")
+plt.ylabel("Price (euros)")
+plt.title("Simple Linear Regression with Prediction")
+plt.legend()
+
 plt.show()
 
-print("Correlation:", df['CPU_freq'].corr(df['Price_euros']))
+# =========================
+# OBJECTIVE 3: ram count
+# =========================
 
-# =========================
-# OBJECTIVE 3: STORAGE vs PRICE
-# =========================
-sns.regplot(x='PrimaryStorage', y='Price_euros', data=df)
-plt.title("Storage vs Price")
+# Plot
+df2 = df['Ram'].value_counts().head().reset_index()
+df2.columns = ['Ram', 'Count']
+plt.figure(figsize=(8,5))
+
+sns.barplot(
+    data=df2,
+    x='Count',
+    y='Ram',
+    palette='magma'
+    
+)
+
+plt.xlabel("Number of Laptops")
+plt.ylabel("RAM (GB)")
+plt.title("Top RAM Configurations in Laptops")
+
+# Add value labels (VERY IMPRESSIVE)
+for i, v in enumerate(df2['Count']):
+    plt.text(v + 2, i, str(v), va='center')
+
+plt.tight_layout()
 plt.show()
-
-print("Correlation:", df['PrimaryStorage'].corr(df['Price_euros']))
-
 # =========================
-# OBJECTIVE 4: PAIRPLOT
+# OBJECTIVE 4: bar graph
 # =========================
-sns.pairplot(df[['Ram', 'CPU_freq', 'PrimaryStorage', 'Weight', 'Price_euros']])
+
+company_counts = df['Company'].value_counts()
+plt.figure(figsize=(12,6))
+
+company_counts.plot(
+    kind='bar',
+    color=plt.cm.Set2.colors   # Different colors automatically
+)
+
+plt.xlabel("Company")
+plt.ylabel("Count")
+plt.title("Number of Laptops by Company")
+
+plt.xticks(rotation=45, ha='right')
+plt.tight_layout()
+
 plt.show()
-
 # =========================
 # OBJECTIVE 5: HYPOTHESIS TESTING (T-TEST)
 # =========================
@@ -112,14 +178,15 @@ high_ram = df[df['Ram'] > 8]['Price_euros']
 # Perform t-test
 t_stat, p_value = ttest_ind(low_ram, high_ram)
 
+# Display results
 print("\n===== T-TEST RESULT =====")
-print("T-Statistic:", t_stat)
-print("P-Value:", p_value)
+print(f"T-Statistic: {t_stat:.4f}")
+print(f"P-Value: {p_value:.4f}")
 
 # Decision
 alpha = 0.05
 
 if p_value < alpha:
-    print("Reject Null Hypothesis (Significant Difference)")
+    print("Conclusion: Reject Null Hypothesis (Significant Difference in Prices)")
 else:
-    print("Fail to Reject Null Hypothesis (No Significant Difference)")
+    print("Conclusion: Fail to Reject Null Hypothesis (No Significant Difference)")
